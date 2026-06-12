@@ -1,0 +1,22 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "games": {
+      ".read": "auth != null",
+      "$gameId": {
+        ".write": "auth != null && ( !data.exists() || !newData.exists() || data.child('creatorUid').val() == auth.uid || newData.child('creatorUid').val() == auth.uid )",
+        "players": {
+          "$uid": {
+            ".write": "auth != null && ( $uid == auth.uid || data.parent().parent().child('creatorUid').val() == auth.uid )"
+          }
+        },
+        "votes": {
+          "$uid": {
+            ".write": "auth != null && ( $uid == auth.uid || data.parent().parent().child('creatorUid').val() == auth.uid )"
+          }
+        }
+      }
+    }
+  }
+}

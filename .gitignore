@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Firebase local artifacts
+.firebase/
+firebase-debug.log
+ui-debug.log
+*.log
+
+# Your real Firebase keys — keep these OUT of git.
+# Copy config.example.js to config.js and fill it in locally.
+public/config.js
+
+# OS noise
+.DS_Store
