@@ -61,13 +61,18 @@ function boot(){
   }
 
   // Restore a prior session label if present
-  const saved = sessionStorage.getItem("storytime_user");
+  const saved = localStorage.getItem("storytime_user");
   auth.onAuthStateChanged(user => {
     if (user && saved){
       const s = JSON.parse(saved);
       me = { uid: user.uid, username: s.username, email: s.email };
       enterLobby();
-    } else if (!user){
+    } else if (user && !saved){
+      // Firebase remembered an anonymous login, but we lost the username
+      // (e.g. browser was closed). Sign out cleanly and show the login screen
+      // instead of hanging on the loading spinner.
+      auth.signOut().catch(()=>{}).finally(() => { view = "login"; render(); });
+    } else {
       if (view === "loading"){ view = "login"; render(); }
     }
   });
@@ -98,7 +103,7 @@ async function doLogin(email){
     const cred = await auth.signInAnonymously();
     const username = usernameFromEmail(email);
     me = { uid: cred.user.uid, username, email };
-    sessionStorage.setItem("storytime_user", JSON.stringify({ username, email }));
+    localStorage.setItem("storytime_user", JSON.stringify({ username, email }));
     enterLobby();
   }catch(e){
     console.error(e);
@@ -111,7 +116,7 @@ function logout(){
   if (presenceRef) presenceRef.remove().catch(()=>{});
   detachGame();
   if (lobbyRef){ lobbyRef.off(); lobbyRef = null; }
-  sessionStorage.removeItem("storytime_user");
+  localStorage.removeItem("storytime_user");
   if (auth) auth.signOut().catch(()=>{});
   me = { uid: null, username: null, email: null };
   view = "login";
@@ -172,12 +177,26 @@ function openGame(id){
   currentGameId = id;
   view = "room";
 
-  // register presence as a player, and auto-remove on disconnect (non-creators)
+  // register presence as a player
   const pRef = db.ref(`games/${id}/players/${me.uid}`);
   pRef.update({ username: me.username, color: colorFor(me.username), joinedAt: Date.now() });
   presenceRef = pRef;
 
   gameRef = db.ref(`games/${id}`);
+
+  // Set up disconnect handlers once, before the listener fires.
+  // • Creator closing the window → mark game finished so players see the end screen.
+  // • Non-creator closing the window → remove them from the player list.
+  gameRef.once("value").then(snap => {
+    const data = snap.val();
+    if (!data) return;
+    if (data.creatorUid === me.uid){
+      gameRef.onDisconnect().update({ status: "finished", currentLevel: null });
+    } else {
+      pRef.onDisconnect().remove();
+    }
+  });
+
   gameRef.on("value", snap => {
     gameData = snap.val();
     if (!gameData){
@@ -185,12 +204,6 @@ function openGame(id){
       toast("This story has ended");
       enterLobby();
       return;
-    }
-    // creators keep the room alive; players are removed if they drop off
-    if (gameData.creatorUid !== me.uid){
-      pRef.onDisconnect().remove();
-    } else {
-      pRef.onDisconnect().cancel();
     }
     if (view === "room") render();
   });
