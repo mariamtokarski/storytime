@@ -81,15 +81,21 @@ function boot(){
 /* =========================================================================
    AUTH / LOGIN
    ========================================================================= */
-function usernameFromEmail(email){
-  const prefix = email.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "");
-  return prefix || "player";
+function cleanUsername(name){
+  // allow letters, numbers, spaces and a few separators; trim to NAME_MAX
+  return name.replace(/[^a-zA-Z0-9 ._-]/g, "").trim().slice(0, NAME_MAX);
 }
 
-async function doLogin(email){
-  email = email.trim();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
-    toast("Enter a valid email address");
+async function doLogin(username, email){
+  username = cleanUsername(username || "");
+  email = (email || "").trim();
+  if (!username){
+    toast("Enter a username to continue");
+    return;
+  }
+  // Email is optional now — but if one is provided, it must look valid.
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    toast("That email doesn't look right — leave it blank or fix it");
     return;
   }
   if (!configured){
@@ -101,7 +107,6 @@ async function doLogin(email){
 
   try{
     const cred = await auth.signInAnonymously();
-    const username = usernameFromEmail(email);
     me = { uid: cred.user.uid, username, email };
     localStorage.setItem("storytime_user", JSON.stringify({ username, email }));
     enterLobby();
@@ -385,30 +390,40 @@ function renderLogin(){
     <p class="sub">Gather your team, size each level together, and watch the votes swim into place.</p>
     ${setupBanner}
     <div class="field">
-      <label for="email">Your email</label>
+      <label for="username">Your username</label>
+      <input id="username" type="text" autocomplete="nickname" maxlength="${NAME_MAX}"
+             placeholder="e.g. campfire-kate" ${configured ? "" : "disabled"} />
+    </div>
+    <div class="field">
+      <label for="email">Email <span class="optional">(optional)</span></label>
       <input id="email" type="email" inputmode="email" autocomplete="email"
-             placeholder="you@studio.com" ${configured ? "" : "disabled"} />
+             placeholder="you@studio.com — only for emailing results" ${configured ? "" : "disabled"} />
     </div>
     <div class="login-foot" style="text-align:left;margin:-6px 0 18px">
       You'll join as <span class="preview-name" id="name-preview">your-name</span>
     </div>
     <button class="btn lg" id="login-btn" ${configured ? "" : "disabled"}>Enter the story room</button>
-    <div class="login-foot">No passwords. Your username is just the part of your email before the @.</div>
+    <div class="login-foot">No passwords. Pick any username. Email is optional — it's only used if you want results sent to you.</div>
   </div></div>`;
 }
 
 function wireLogin(){
+  const username = document.getElementById("username");
   const email = document.getElementById("email");
   const preview = document.getElementById("name-preview");
   const btn = document.getElementById("login-btn");
-  if (email){
-    email.addEventListener("input", () => {
-      const v = email.value.trim();
-      preview.textContent = v.includes("@") ? usernameFromEmail(v) : (v ? usernameFromEmail(v + "@x.com") : "your-name");
+  const submit = () => doLogin(username?.value, email?.value);
+  if (username){
+    username.addEventListener("input", () => {
+      const v = cleanUsername(username.value);
+      preview.textContent = v || "your-name";
     });
-    email.addEventListener("keydown", e => { if (e.key === "Enter") doLogin(email.value); });
+    username.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   }
-  if (btn) btn.addEventListener("click", () => doLogin(email.value));
+  if (email){
+    email.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  }
+  if (btn) btn.addEventListener("click", submit);
 }
 
 /* =========================================================================
@@ -740,8 +755,11 @@ function renderFinal(){
       <td class="c-pts">${l.points!=null?`<span class="pts-chip">${l.points}</span>`:`<span class="pts-chip pending">—</span>`}</td>
     </tr>`).join("");
 
+  const emailBtn = gameData.creatorEmail
+    ? `<button class="btn amber" id="email-btn">Email me this table</button>`
+    : "";
   const creatorActions = creator ? `
-    <button class="btn amber" id="email-btn">Email me this table</button>
+    ${emailBtn}
     <button class="btn danger" id="gameover-btn">Game over · clear data</button>
   ` : `<p class="deck-hint" style="align-self:center">Waiting for ${esc(gameData.creatorName)} to close the story…</p>`;
 
