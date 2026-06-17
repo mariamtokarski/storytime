@@ -60,13 +60,15 @@ function boot(){
     return;
   }
 
-  // Restore a prior session label if present
-  const saved = localStorage.getItem("storytime_user");
+  // Restore a prior session label if present.
+  // Read fresh on every auth change so a login that just wrote localStorage
+  // is seen immediately (avoids signing the user back out mid-login).
   auth.onAuthStateChanged(user => {
+    const saved = localStorage.getItem("storytime_user");
     if (user && saved){
       const s = JSON.parse(saved);
       me = { uid: user.uid, username: s.username, email: s.email };
-      enterLobby();
+      if (view !== "lobby" && view !== "room") enterLobby();
     } else if (user && !saved){
       // Firebase remembered an anonymous login, but we lost the username
       // (e.g. browser was closed). Sign out cleanly and show the login screen
@@ -105,13 +107,16 @@ async function doLogin(username, email){
   const btn = document.getElementById("login-btn");
   if (btn){ btn.disabled = true; btn.textContent = "Lighting the fire…"; }
 
+  // Persist the label BEFORE sign-in so onAuthStateChanged sees it and
+  // doesn't treat this as an orphaned session and sign us back out.
+  localStorage.setItem("storytime_user", JSON.stringify({ username, email }));
   try{
     const cred = await auth.signInAnonymously();
     me = { uid: cred.user.uid, username, email };
-    localStorage.setItem("storytime_user", JSON.stringify({ username, email }));
     enterLobby();
   }catch(e){
     console.error(e);
+    localStorage.removeItem("storytime_user");
     toast("Could not sign in: " + (e.code || e.message));
     if (btn){ btn.disabled = false; btn.textContent = "Enter the story room"; }
   }
