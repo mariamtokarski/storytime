@@ -5,6 +5,7 @@
 
 const FIB = [1, 3, 5, 8, 13, 21];
 const NAME_MAX = 20;
+const STALE_MS = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
 
 /* ---- color helper: stable color per username ---------------------------- */
 const PALETTE = ["#ef6d3b","#f4b740","#4cb8a6","#8a6fb0","#e0698a","#5fb87f","#6d9bd1","#d98b4a"];
@@ -130,10 +131,29 @@ function logout(){
 /* =========================================================================
    LOBBY
    ========================================================================= */
+
+/* Delete any active games that have had no activity for over 3 hours.
+   Called once each time a user enters the lobby. */
+function pruneStaleGames(){
+  const cutoff = Date.now() - STALE_MS;
+  db.ref("games").once("value").then(snap => {
+    const all = snap.val() || {};
+    Object.entries(all).forEach(([id, g]) => {
+      if (g.status !== "active") return;
+      const lastSeen = g.lastActivity || g.createdAt || 0;
+      if (lastSeen < cutoff){
+        db.ref(`games/${id}`).remove().catch(() => {});
+      }
+    });
+  }).catch(() => {});
+}
+
 function enterLobby(){
   view = "lobby";
   currentGameId = null;
   detachGame();
+
+  pruneStaleGames();
 
   lobbyRef = db.ref("games");
   lobbyRef.on("value", snap => {
@@ -155,6 +175,7 @@ async function createGame(name){
     creatorUid: me.uid,
     creatorName: me.username,
     createdAt: now,
+    lastActivity: now,
     status: "active",
     levels: {},               // ordered level records
     currentLevel: null,       // { title, revealed }
@@ -244,7 +265,8 @@ async function startLevel(title){
   await gameRef.update({
     levelSeq: seq,
     currentLevel: { number: seq, title, revealed: false },
-    votes: {}
+    votes: {},
+    lastActivity: Date.now()
   });
 }
 
@@ -252,10 +274,11 @@ function castVote(value){
   if (!gameData.currentLevel) return;
   // votes may change freely until the level is closed
   db.ref(`games/${currentGameId}/votes/${me.uid}`).set({ value, username: me.username });
+  db.ref(`games/${currentGameId}/lastActivity`).set(Date.now());
 }
 
 function reveal(){
-  gameRef.child("currentLevel/revealed").set(true);
+  gameRef.update({ "currentLevel/revealed": true, lastActivity: Date.now() });
 }
 
 /* winning number = the value with the most votes.
