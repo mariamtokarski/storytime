@@ -417,7 +417,7 @@ function renderLobby(){
   <div class="lobby-head">
     <div>
       <div class="eyebrow">The lobby</div>
-      <h2>Join your team game in real-time, or start your own</h2>
+      <h2>Join a game, or create your own</h2>
       <p>Anyone can create a game. Pick a live one below to jump in.</p>
     </div>
   </div>
@@ -425,11 +425,11 @@ function renderLobby(){
   ${list}
 
   <div class="card" style="margin-top:26px;padding:22px 24px">
-    <div class="eyebrow" style="margin-bottom:10px">Start a new story</div>
+    <div class="eyebrow" style="margin-bottom:10px">Start a new game</div>
     <div class="create-row">
-      <input id="new-game" maxlength="${NAME_MAX}" placeholder="Name your story (max ${NAME_MAX} chars)" />
+      <input id="new-game" maxlength="${NAME_MAX}" placeholder="Name your game (max ${NAME_MAX} characters)" />
       <span class="char-count" id="game-count">0/${NAME_MAX}</span>
-      <button class="btn" id="create-btn">Create story</button>
+      <button class="btn" id="create-btn">Create game</button>
     </div>
   </div>`;
 }
