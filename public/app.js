@@ -188,14 +188,14 @@ function openGame(id){
   gameRef = db.ref(`games/${id}`);
 
   // Set up disconnect handlers once, before the listener fires.
-  // • Creator closing the window → mark game finished so players see the end screen.
   // • Non-creator closing the window → remove them from the player list.
+  // • Creator closing the window → game STAYS active. Because their login now
+  //   persists (localStorage), they can return via the lobby and rejoin. The
+  //   game only ends when the creator hits End game / Game over.
   gameRef.once("value").then(snap => {
     const data = snap.val();
     if (!data) return;
-    if (data.creatorUid === me.uid){
-      gameRef.onDisconnect().update({ status: "finished", currentLevel: null });
-    } else {
+    if (data.creatorUid !== me.uid){
       pRef.onDisconnect().remove();
     }
   });
@@ -214,14 +214,20 @@ function openGame(id){
 }
 
 function detachGame(){
+  // Cancel any armed onDisconnect handlers so leaving one game intentionally
+  // can never fire a stale "finish"/"remove" on it after we've moved on.
+  if (gameRef){ gameRef.onDisconnect().cancel().catch(()=>{}); }
+  if (presenceRef){ presenceRef.onDisconnect().cancel().catch(()=>{}); }
   if (gameRef){ gameRef.off(); gameRef = null; }
   presenceRef = null;
   gameData = null;
 }
 
 function leaveToLobby(){
-  // a non-creator leaving just removes their presence
-  if (currentGameId && gameData && gameData.creatorUid !== me.uid){
+  // Leaving just drops your presence. The game stays active so the creator —
+  // who stays signed in — can rejoin from the lobby. A game only ends when the
+  // creator hits End game / Game over.
+  if (currentGameId && me.uid){
     db.ref(`games/${currentGameId}/players/${me.uid}`).remove().catch(()=>{});
   }
   detachGame();
